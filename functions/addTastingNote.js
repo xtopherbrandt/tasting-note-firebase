@@ -18,7 +18,8 @@ Contact Info: xtopher.brandt at gmail
 */
 
 'use strict';
- 
+
+const Scraper = require( './wine-searcher-scraper');
 const functions = require('firebase-functions');
 const { dialogflow, Image, UpdatePermission, SimpleResponse, Suggestions, List, BasicCard, Table } = require('actions-on-google')
 
@@ -34,30 +35,77 @@ function getTastingDetail( conv ){
     return conv.parameters.tastingDetail;
 }
 
+function startLabelLookup( conv, vintage, bottleName ){
+    
+    var scraper = new Scraper();
+    var labelQuery = `${vintage} ${bottleName}`;
+
+    console.log( `Looking up: ${labelQuery}` );
+
+    var labelLookupPromise = scraper.wineLabelQuery( labelQuery );
+
+    labelLookupPromise.then( label => {
+        if ( label && label.producer ){
+            goodLabelInfoResponse( conv, label );
+        }
+        else{
+            var responseText = `Sorry, I couldn't find any information on a ${labelQuery}`
+            badLabelInfoResponse( conv, responseText );
+        }
+    })
+
+    return labelLookupPromise;
+}
+
+function goodLabelInfoResponse( conv, label ){
+    
+    conv.ask( new SimpleResponse({
+        speech: `Nice. Where did you taste it?`,
+        text: `Where did you taste it?`
+    }));
+
+    conv.ask( new BasicCard({
+        title: label.labelName,
+        subtitle: label.vintage,
+        image: getImage( label.imageUrl, `Bottle Image` ),
+        text: label.getFormattedText()
+    }));
+
+    conv.contexts.set( 'Question_Location', 1 );
+    conv.contexts.set( 'Describe_Bottle', 10 );
+}
+
+function getImage( url, altText ){
+    return new Image({
+        url: url,
+        alt: altText
+    });
+}
+
+function badLabelInfoResponse( conv, responseText ){
+                
+    conv.ask(new SimpleResponse({
+        speech: responseText,
+        text: responseText
+    }));
+
+    conv.contexts.set( 'Question_Bottle_Description', 1 );
+}
+
 exports.describeBottle = function describeBottle( conv ){
+
+    console.info( 'Describe Bottle' );
 
     var vintage = getInputVintage( conv );
     var bottleName = getInputBottleName( conv );
 
     if ( vintage && bottleName ){
-        conv.ask( new SimpleResponse({
-            speech: `Nice. A ${vintage} ${bottleName}. Where did you taste it?`,
-            text: `A ${vintage} ${bottleName}. Where did you taste it?`
-        }))
-        
-        conv.contexts.set( 'Question_Location', 1 );
-        conv.contexts.set( 'Describe_Bottle', 10 );
+        return startLabelLookup( conv, vintage, bottleName );
     }
     else{
-        
-        conv.ask(new SimpleResponse({
-            speech: `Sorry, I didn't get that. What was the vintage and bottle label name?`,
-            text: `Sorry, I didn't get that. What was the vintage and bottle label name?`
-        }));
-
-        conv.contexts.set( 'Question_Bottle_Description', 1 );
+        responseText = `Sorry, I didn't get that. What was the vintage and bottle label name?`;
+        badLabelInfoResponse( conv, responseText );
     }
-
 }
 
 exports.tastingDetails = function tastingDetails( conv ){

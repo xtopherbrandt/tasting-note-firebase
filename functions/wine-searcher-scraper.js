@@ -26,17 +26,15 @@ const Label = require('./label.js');
 
 module.exports = class WineSearcherScraper {
 
-
-    constructor ( context ){
+    constructor ( ){
         this.url = 'https://www.wine-searcher.com/find/';
-        this.callContext = context;
     }
     
     wineLabelQuery( queryString ){
 
         var getUri = `${this.url}${queryString}`;
         
-        this.callContext.log( `Wine-Searcher uri: ${getUri}`);
+        console.log( `Wine-Searcher uri: ${getUri}`);
 
         var jsDompromise = JSDOM.fromURL( getUri);
 
@@ -48,7 +46,7 @@ module.exports = class WineSearcherScraper {
 
     queryPromiseFulfilled( dom ) { 
         const { window } = dom.window;
-        const $ = require( 'jQuery' )(window);
+        const $ = require( 'jquery' )(window);
         var wine = {};
         wine.varietal = this.getGrape( $ );
         wine.producer = this.getProducer( $ );
@@ -62,7 +60,8 @@ module.exports = class WineSearcherScraper {
         wine.communityScore = 0;
         wine.foodPairing = this.getFoodPairing( $ );
         wine.attribution = window.location.href;
-        this.callContext.log( wine );
+
+        console.log( wine );
 
         this.label = this.createLabel( wine );
         this.resolve( this.label );
@@ -143,14 +142,11 @@ module.exports = class WineSearcherScraper {
 
     createLabel( wine ){
         
-        var label = new Label( this.callContext );
+        var label = new Label( );
         
         label.setLabelParameters( wine.vintage, wine.varietal, wine.producer, wine.labelName, '', wine.imageUrl, wine.locale.country, wine.locale.region, wine.locale.subRegion, wine.locale.appellation,'', wine.style, wine.averagePrice, wine.criticsScore, wine.communityScore, wine.foodPairing );
 
         return label;
     }
 
-    processRequestError( error ){
-        this.callContext.log( `An error occured while attempting to contact Snooth. ${error}` );
-    }
 }

@@ -27,7 +27,7 @@ const {google} = require('googleapis');
 
 process.env.DEBUG = 'dialogflow:debug'; // enables lib debugging statements
 
-const app = dialogflow({debug: false});
+const app = dialogflow({debug: true});
 
 const admin = require('firebase-admin');
 
