@@ -23,15 +23,7 @@ const uuidv4 = require('uuid/v4');
 const ResponseFormatter = require( './responseFormatter');
 
 module.exports = class Label {
-    constructor( ){
-
-        //** FIX ME */
-        this.context = null;
-        this.tableService = null
-
-    }
-
-    setLabelParameters ( vintage, blend, producer, labelName, proprietaryName, imageUrl, country, region, subRegion, appellation, key, style, averagePrice, criticsScore, communityScore, foodPairing ) {
+    constructor( vintage, blend, producer, labelName, proprietaryName, imageUrl, country, region, subRegion, appellation, key, style, averagePrice, criticsScore, communityScore, foodPairing ){
         this.key = key
         this.vintage = vintage;
         this.blend = blend; // either the predominant grape varietal in the blend or the name of the pre-defined blend (Red Bordeaux, Burgundy...)
@@ -48,62 +40,7 @@ module.exports = class Label {
         this.criticsScore = criticsScore;
         this.communityScore = communityScore;
         this.foodPairing = foodPairing;
-    }
 
-    static LoadTableRecord( record, label ){
-        label.key = record.RowKey._;
-        label.vintage = record.Vintage._;
-        label.blend = record.Blend._;
-        label.producer = record.PartitionKey._;
-        label.labelName = record.LabelName._;
-        if ( 'ImageUrl' in record ){
-            label.imageUrl = record.ImageUrl._;
-        }
-        if ( 'country' in record ){
-            label.country = record.country._;
-        }
-        if ( 'region' in record ){
-            label.region = record.region._;
-        }
-        if ( 'subRegion' in record ){
-            label.subRegion = record.subRegion._;
-        }
-        if ( 'appellation' in record ){
-            label.appellation = record.appellation._;
-        }
-        if ( 'style' in record ){
-            label.style = record.style._;
-        }
-        if ( 'averagePrice' in record ){
-            label.averagePrice = record.averagePrice._;
-        }
-        if ( 'criticsScore' in record ){
-            label.criticsScore = record.criticsScore._;
-        }
-        if ( 'communityScore' in record ){
-            label.communityScore = record.communityScore._;
-        }
-        if ( 'foodPairing' in record ){
-            label.foodPairing = record.foodPairing._;
-        }
-    }
-
-    updateTo( otherLabel ){
-        this.imageUrl = otherLabel.imageUrl;
-        this.criticsScore = otherLabel.criticsScore;
-        this.communityScore = otherLabel.communityScore;
-        this.foodPairing = otherLabel.foodPairing;
-        this.averagePrice = otherLabel.averagePrice;
-        this.attribution = otherLabel.attribution;
-        
-        if (!this.blend) { this.blend = otherLabel.blend; }
-        if (!this.country ) { this.country = otherLabel.country; }
-        if (!this.region) {this.region = otherLabel.region; }
-        if (!this.subRegion) {this.subRegion = otherLabel.subRegion; }
-        if (!this.appellation) {this.appellation = otherLabel.appellation; }
-        if (!this.style) {this.style = otherLabel.style; }
-
-        this.updateThisLabel();
     }
 
     isValid( ){
@@ -122,174 +59,6 @@ module.exports = class Label {
         if ( this.labelName != otherLabel.labelName ) return false;
         
         return true;
-    }
-
-    beginFindByKey( producer, key ){
-        this.producer = producer;
-        this.key = key;
-
-        return this.beginFind();
-    }
-
-    beginFind(){
-        var query = this.constructQuery( );
-
-        return this.beginQuery( query ).then( result => { 
-
-            if ( result.entries.length > 0 ){
-                Label.LoadTableRecord( result.entries[0], this );
-
-                if ( console ){
-                    console.log( `Found ${result.entries.length} label(s). Using key: ${this.key}` );
-                }
-
-                return true;
-            }
-            else{
-                return false;
-            }
-        });
-
-    }
-
-    constructQuery(){
-        if ( this.key ){
-            return this.constructQueryWithKey();
-        }
-        else{
-            return this.constructQueryWithoutKey();
-        }
-    }
-
-    constructQueryWithoutKey( ) {
-        return new azure.TableQuery().where( 'PartitionKey eq ?', this.producer ).and( 'Vintage eq ?', this.vintage ).and( 'LabelName eq ?', this.labelName );
-    }     
-
-    constructQueryWithKey( ) {
-        return new azure.TableQuery().where( 'PartitionKey eq ?', this.producer ).and( 'RowKey eq ?', this.key );
-    }     
-
-    static ConstructQueryForAll( ) {
-        return new azure.TableQuery();
-    }
-
-    beginQuery( query ){
-        return new Promise( ( resolve, reject ) => {
-            this.tableService.queryEntities( 'Label', query, null, ( error, result ) => {
-                if ( error ){
-                    reject( error );
-                }
-                else{
-                    resolve( result );
-                }
-            });
-        });
-
-    }
-
-    addIfUnknown(){
-        return this.beginFind().then( labelFound => { 
-            if ( !labelFound ) {
-                 this.addThisLabel(); 
-            }
-
-            return this;
-        });
-    }
-
-    addThisLabel(){
-        if ( this.context ){        
-            this.context.bindings.labelOutputTable = [];
-            this.key = uuidv4();
-
-            this.context.bindings.labelOutputTable.push( this.getLabelEntity() );
-        }    
-    }
-
-    getLabelEntity(){
-        return {
-            PartitionKey: this.producer,
-            RowKey: this.key,
-            Vintage: this.vintage,
-            LabelName: this.labelName,
-            ImageUrl: this.imageUrl,
-            Blend: this.blend,
-            ProprietaryName: this.proprietaryName,
-            country: this.country,
-            region: this.region,
-            subRegion: this.subRegion,
-            appellation: this.appellation,
-            style: this.style,
-            averagePrice: this.averagePrice,
-            criticsScore: this.criticsScore,
-            communityScore: this.communityScore,
-            foodPairing: this.foodPairing,
-            attribution: this.attribution,
-        };
-    }
-
-    updateThisLabel(){
-
-        var labelEntityUpdate = this.getLabelEntity();
-
-        this.tableService.mergeEntity( 'Label', labelEntityUpdate, (error, result) => this.processUpdateLabelEntityResponse( this.context, error, result ) );
-
-    }
-
-    processUpdateLabelEntityResponse( context, error, result ){
-
-        if ( !error ){
-            if ( console ){
-                console.log( `Updated label for: ${this.vintage} ${this.labelName}`);
-            }
-        }
-        else{
-            if ( console ){
-                console.error( `Error updating label for: ${this.vintage} ${this.labelName}. Error: ${error}`);
-            }
-        }
-    }
-    
-    static beginGetAll( context ){
-        var query = Label.ConstructQueryForAll();
-
-        return Label.GetAllLabels( context, query ).then( result => { 
-
-            if ( result.entries.length > 0 ){
-                return Label.LoadASetOfLabels( context, result.entries );
-            }
-            else{
-                return [];
-            }
-        });
-
-    }
-
-    static GetAllLabels( context, query ){
-        return new Promise(( resolve, reject ) => {
-            
-            var tableService = azure.createTableService();
-
-            tableService.queryEntities( "Label", query, null, ( error, result ) => {
-                if ( result ){
-                    resolve ( result );
-                }
-                else{
-                    reject( error );
-                }
-            });
-        });
-    }
-
-    static LoadASetOfLabels( context, records ){
-        var labelSet = [];
-        for ( var i = 0; i < records.length; i++ ){
-            var record =  records[i];
-            var label = new Label( context );
-            Label.LoadTableRecord( record, label );
-            labelSet.push( label );
-        }
-        return labelSet;
     }
 
     //** Response Formatting */
@@ -481,5 +250,26 @@ module.exports = class Label {
         }
 
         return ratingOutput;
+    }
+
+    toJSON(){
+        return {
+            rowKey: ( this.key ? this.key : uuidv4() ),
+            vintage: ( this.vintage ? this.vintage : '' ),
+            blend: ( this.blend ? this.blend : '' ), // either the predominant grape varietal in the blend or the name of the pre-defined blend (Red Bordeaux, Burgundy...)
+            partitionKey: ( this.producer ? this.producer : '' ),
+            labelName: ( this.labelName ? this.labelName : '' ),
+            proprietaryName: ( this.proprietaryName ? this.proprietaryName : '' ),
+            imageUrl: ( this.imageUrl ? this.imageUrl : '' ),
+            country: ( this.country ? this.country : '' ),
+            region: ( this.region ? this.region : '' ),
+            subRegion: ( this.subRegion ? this.subRegion : '' ),
+            appellation: ( this.appellation ? this.appellation : '' ),
+            style: ( this.style ? this.style : '' ),
+            averagePrice: ( this.averagePrice ? this.averagePrice : '' ),
+            criticsScore: ( this.criticsScore ? this.criticsScore : '' ),
+            communityScore: ( this.communityScore ? this.communityScore : '' ),
+            foodPairing: ( this.foodPairing ? this.foodPairing : '' )
+        };
     }
 }

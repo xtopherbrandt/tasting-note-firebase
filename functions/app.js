@@ -39,6 +39,7 @@ app.intent('What Can You Do', help );
 
 app.intent('Describe Bottle', addTastingNote.describeBottle );
 app.intent('Tasting Details', addTastingNote.tastingDetails );
+app.intent('Tasting Note Confirmation', addTastingNote.tastingNoteConfirmation );
 app.intent('Tasting Details More', addTastingNote.tastingDetails );
 app.intent('Tasting Note Confirmation - yes', addTastingNote.addTastingNote );
 
@@ -111,10 +112,10 @@ function help(conv) {
     conv.ask(new Suggestions(welcomeSuggestions));
     conv.contexts.set( 'Root', 1 );
 }
-
+/*
 app.catch( (conv, e) => {
     console.error( `An unhandled exception was caught:\n ${e}` );
     conv.close( 'Oops. Something went really sideways. Kind of like someone switching my chardonnay with gasoline. Yuck. Give me minute to wash out my mouth, then try again.' );
   });
-
+*/
 module.exports = app;

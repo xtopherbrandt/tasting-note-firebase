@@ -23,6 +23,7 @@ Contact Info: xtopher.brandt at gmail
 const jsdom = require( 'jsdom' );
 const { JSDOM } = jsdom;
 const Label = require('./label.js');
+const notify = require('./notifications' );
 
 module.exports = class WineSearcherScraper {
 
@@ -36,11 +37,22 @@ module.exports = class WineSearcherScraper {
         
         console.log( `Wine-Searcher uri: ${getUri}`);
 
-        var jsDompromise = JSDOM.fromURL( getUri);
+        var jsDompromise = JSDOM.fromURL( getUri, { pretendToBeVisual: true, userAgent: 'Mozilla/5.0 (win32) AppleWebKit/537.36 (KHTML, like Gecko)' });
 
-        jsDompromise.then( dom => this.queryPromiseFulfilled( dom ) );
+        jsDompromise.then( dom => this.queryPromiseFulfilled( dom ) ).catch(err => {
+            if ( err.statusCode == 403 ){
+                console.log( 'CAUGHT!' );
+                notify.testNotification();
+                this.reject( err );
+            }
+            else{
+                console.log('Error scraping wine searcher', err );
+                this.reject( );
+            }
+            
+        });;
 
-        return new Promise((resolve, reject) => {this.resolve = resolve;} );
+        return new Promise((resolve, reject) => {this.resolve = resolve; this.reject = reject;} );
 
     }
 
@@ -50,7 +62,9 @@ module.exports = class WineSearcherScraper {
         var wine = {};
         wine.varietal = this.getGrape( $ );
         wine.producer = this.getProducer( $ );
+
         wine.locale = this.getRegion( $ );
+        wine.locale.appellation = this.getAppellation( $ );
         wine.vintage = this.getVintage( $ );
         wine.labelName = this.getLabelName( $ );
         wine.imageUrl = this.getLabelImageUrl( $ );
@@ -61,10 +75,11 @@ module.exports = class WineSearcherScraper {
         wine.foodPairing = this.getFoodPairing( $ );
         wine.attribution = window.location.href;
 
-        console.log( wine );
+        //console.log( wine );
 
         this.label = this.createLabel( wine );
-        this.resolve( this.label );
+    
+        this.resolve( [this.label] );
     }
 
     getProducer( $ ){        
@@ -75,25 +90,33 @@ module.exports = class WineSearcherScraper {
         return $("span.icon-grape" ).next().children("a").text();
     }
 
+    getAppellation( $ ){
+        return $("span.icon-region" ).next().children("a").first().text();
+    }
+
     getRegion( $ ){
-        var regionText = $("span.icon-region" ).next().children("a").text();
-        return this.separateRegion( regionText );
+        var regionSelector = $("span.icon-region" ).next().children("a").nextAll();
+        return this.separateRegion( regionSelector );
+    }
+
+    getTopHeaderName( $ ){
+        
+        return $("#top_header" ).children("[itemprop='name']").text();
+    }
+
+    parseTopHeaderName( $ ){
+        // 1: Vintage
+        // 2: Label Name
+        return /(\d{4}|NV)\s([\w\s-&'.]*),/.exec( this.getTopHeaderName( $ ) );
     }
 
     getVintage( $ ){
-        return $("#top_header" ).children("[itemprop='model']").text();
+
+        return this.parseTopHeaderName( $ )[ 1 ];
     }
 
     getLabelName( $ ){
-        var labelName
-
-        labelName = $("#top_header" ).children("[itemprop='name']").text().split(',')[0];
-
-        if ( !labelName ){
-            labelName = $("#top_header" ).text().split(',')[0].trim();
-        }
-
-        return labelName;
+        return this.parseTopHeaderName( $ )[ 2 ];
     }
 
     getLabelImageUrl( $ ){
@@ -105,11 +128,12 @@ module.exports = class WineSearcherScraper {
     }
 
     getStyle( $ ){
-        return $("div.icon-style").next().children("a").text();
+        return $("a[title='View Wine Style']").text();
     }
 
     getFoodPairing( $ ){
-        return $("div.icon-food").next().children("span.sidepanel-text").children("a").text();
+
+        return $("a[title='View Food Category']").text();
     }
 
     getAveragePrice( $ ){
@@ -117,11 +141,11 @@ module.exports = class WineSearcherScraper {
         return priceText.replace(/\s/g,'');
     }
 
-    separateRegion( wineRegion ){
+    separateRegion( regionSelector ){
         var splitRegion = {};
-        var regionParts = wineRegion.split( "\n");
-
-        var index = regionParts.length - 2;
+        var regionParts = regionSelector.text().split( ",");
+        console.log( regionParts );
+        var index = regionParts.length - 1;
 
         splitRegion.country = regionParts[ index-- ];
         
@@ -133,19 +157,14 @@ module.exports = class WineSearcherScraper {
             splitRegion.subRegion = regionParts[ index-- ];
         }
 
-        if ( index == 0 ){
-            splitRegion.appellation = regionParts[ index-- ];
-        }
-
+        
         return splitRegion;
     }
 
     createLabel( wine ){
         
-        var label = new Label( );
-        
-        label.setLabelParameters( wine.vintage, wine.varietal, wine.producer, wine.labelName, '', wine.imageUrl, wine.locale.country, wine.locale.region, wine.locale.subRegion, wine.locale.appellation,'', wine.style, wine.averagePrice, wine.criticsScore, wine.communityScore, wine.foodPairing );
-
+        var label = new Label( wine.vintage, wine.varietal, wine.producer, wine.labelName, '', wine.imageUrl, wine.locale.country, wine.locale.region, wine.locale.subRegion, wine.locale.appellation,'', wine.style, wine.averagePrice, wine.criticsScore, wine.communityScore, wine.foodPairing );
+    
         return label;
     }
 
