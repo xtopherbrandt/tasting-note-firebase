@@ -21,7 +21,7 @@ Contact Info: xtopher.brandt at gmail
 
 var admin = require('firebase-admin');
 const algoliasearch = require('algoliasearch');
-var serviceAccount = require('./serviceAccountKey.json');
+var serviceAccount = require('./TastingNote-7b5f997b651b.json');
 const Label = require('./label.js');
 
 const client = algoliasearch('4UGMV9KS0C', 'f591a817b19de8c74a8b3ed05e236486');
