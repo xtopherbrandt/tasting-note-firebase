@@ -23,6 +23,7 @@ const functions = require('firebase-functions');
 const { dialogflow, Image, UpdatePermission, SimpleResponse, Suggestions, BasicCard, Button } = require('actions-on-google')
 const moment = require( 'moment' );
 const addTastingNote = require( './addTastingNote.js' );
+
 const {google} = require('googleapis');
 
 process.env.DEBUG = 'dialogflow:debug'; // enables lib debugging statements
@@ -42,6 +43,9 @@ app.intent('Tasting Details', addTastingNote.tastingDetails );
 app.intent('Tasting Note Confirmation', addTastingNote.tastingNoteConfirmation );
 app.intent('Tasting Details More', addTastingNote.tastingDetails );
 app.intent('Tasting Note Confirmation - yes', addTastingNote.addTastingNote );
+
+//administrative intents
+app.intent('Remove Label From System', addTastingNote.removeLabelFromSystem );
 
 const welcomeSuggestions = [
     'Add a Note'
@@ -112,6 +116,7 @@ function help(conv) {
     conv.ask(new Suggestions(welcomeSuggestions));
     conv.contexts.set( 'Root', 1 );
 }
+
 /*
 app.catch( (conv, e) => {
     console.error( `An unhandled exception was caught:\n ${e}` );
