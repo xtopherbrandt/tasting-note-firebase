@@ -36,7 +36,9 @@ const firestore = admin.firestore();
 
 exports.findLabel = function findLabel ( vintage, labelName ){
 
-    var algoliIndexSearch = index.search( { query: labelName } )
+    console.log ( `  in Algolia`);
+    
+    return index.search( { query: labelName } )
         .then( response => {
             var labelHits = [];
 
@@ -46,17 +48,15 @@ exports.findLabel = function findLabel ( vintage, labelName ){
         })
         .catch(err => {
             console.log('Error getting documents', err);
+            return [new Label()];
         });
-
-        return algoliIndexSearch;
-
 }
   
 exports.addLabel = function addLabel ( label ){
     let documentRef = firestore.collection('labels').doc();
 
     documentRef.create( label.toJSON() ).then((res) => {
-      console.log(`Label added: ${label.labelName}`);
+      console.log(`Label added: ${label.labelName} RowKey: ${label.key}`);
       addIndex( label );
     }).catch((err) => {
       console.log(`Failed to create document: ${err}`);
@@ -66,30 +66,72 @@ exports.addLabel = function addLabel ( label ){
 function addIndex( label ){
     index.addObject( label )
         .then( response => {
-            console.log( `Label added to search index. Object ID: ${response.objectID}`);
+            console.log( `Label added to search index. Object ID: ${response.objectID} RowKey: ${label.key}`);
         })
         .catch( err => {
             console.log( `Error adding index for label : ${label.labelName} \n error: ${err}`);
         });
 }
 
+exports.removeLabelFromSystem = function removeLabel ( rowKey ){
+    console.log( `Removing label row key: ${rowKey}`);
+    deleteLabelIndicesByRowKey( rowKey )
+        .then( () => {
+            console.log( `Label index successfully deleted.` );
+            deleteLabelDocument( rowKey ).then(() => {
+                console.log('Label successfully deleted.');
+              });;
+        });
+}
+
+function deleteLabelIndicesByRowKey( rowKey ){
+    return index.search( {query: rowKey} )
+        .then( response => {
+            response.hits.map( deleteIndexHitObject );
+        });
+}
+
+function deleteIndexHitObject( hit ){
+    console.log( `Deleting index object ${hit.objectID}` );
+    return index.deleteObject( hit.objectID );
+}
+
+function deleteLabelDocument( rowKey ){
+    var labelsRef = firestore.collection( 'labels' );
+    return labelsRef.where( 'rowKey', '==', rowKey ).get()
+        .then(snapshot => {
+            if (snapshot.empty) {
+                console.log('No matching documents.');
+                return;
+            }
+        
+            snapshot.forEach(doc => {
+                console.log(`Deleting : ${doc.id} => ${doc.data()}`);
+                doc.ref.delete();
+            });
+        })
+        .catch(err => {
+            console.log('Error getting documents', err);
+        });
+}
+
 function vintageCheck( label ){
-    return ( label.Vintage == this );
+    return ( label.vintage == this );
 }
 
 function hitToLabel( hit ){
     return new Label( 
-        hit.Vintage, 
-        hit.Blend, 
-        hit.PartitionKey, 
-        hit.LabelName, 
-        hit.ProprietaryName, 
-        hit.ImageUrl, 
+        hit.vintage, 
+        hit.blend, 
+        hit.partitionKey, 
+        hit.labelName, 
+        hit.proprietaryName, 
+        hit.imageUrl, 
         hit.country, 
         hit.region, 
         hit.subRegion, 
         hit.appellation,
-        hit.RowKey, 
+        hit.rowKey, 
         hit.style, 
         hit.averagePrice, 
         hit.criticsScore, 

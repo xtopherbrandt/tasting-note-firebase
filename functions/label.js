@@ -253,8 +253,12 @@ module.exports = class Label {
     }
 
     toJSON(){
+        if ( !this.key ){
+            this.key = uuidv4();
+        }
+
         return {
-            rowKey: ( this.key ? this.key : uuidv4() ),
+            rowKey: this.key,
             vintage: ( this.vintage ? this.vintage : '' ),
             blend: ( this.blend ? this.blend : '' ), // either the predominant grape varietal in the blend or the name of the pre-defined blend (Red Bordeaux, Burgundy...)
             partitionKey: ( this.producer ? this.producer : '' ),

@@ -85,81 +85,75 @@ function getTastingDetailsAsCommaSeparatedList( conv ){
     return listText;
 }
 
-var labelLookupResolver;
-var labelLookupRejector;
-var labelLookupResolved;
-var labelResponsesRemaining;
+function getRowKeyFromContext( conv ){
+    var context = getAddNoteContext( conv );
+    if ( context ){
+        return context.parameters.rowKey;
+    }
+}
 
-function startLabelLookup( conv, vintage, bottleName ){
+function startLabelLookup( conv ){
     
+    var vintage = getVintageFromContext( conv );
+    var bottleName = getBottleNameFromContext( conv );
+
     var scraper = new Scraper();
     var labelQuery = `${vintage} ${bottleName}`;
-
-    var labelLocalLookupPromise = LabelProcessor.findLabel( vintage, bottleName );
-    var wineSearcherLookupPromise = scraper.wineLabelQuery( labelQuery );
-    
+   
     console.log( `Looking up: ${labelQuery}` );
 
-    labelResponsesRemaining = 2;
-    labelLookupResolved = false;
-    
-    var labelLookupPromise = new Promise( ( resolve, reject ) => {
-        labelLookupResolver = resolve;
-        labelLookupRejector = reject;
-    });
+    return LabelProcessor.findLabel( vintage, bottleName ).then( labels => {
 
-    labelLocalLookupPromise.then( labels => {
+        console.log( `  Found ${labels.length} labels in local storage.`);
 
-        labelLookupCompletion(labels, conv, labelQuery);
-
-    });
-
-    wineSearcherLookupPromise.then( labels => {
-        LabelProcessor.addLabel( labels[0] );
-        labelLookupCompletion( labels, conv, labelQuery );
-
-    }).catch(( err ) => {
-        console.log ( `exception caught; lookup resolved: ${labelLookupResolved}; responses remaining: ${labelResponsesRemaining}`);
-        console.log( err );
-        if ( !labelLookupResolved && labelResponsesRemaining <= 0 ){
-            console.log('Could not scape the wine from wine searcher' );
-            var responseText = `Sorry, I couldn't find any information on a ${labelQuery}`
-            setBadLabelInfoResponse( conv, responseText );
-            labelLookupResolver();
+        if ( labels && labels.length == 0 ){
+            return scraper.wineLabelQuery( labelQuery ).then( labels => {
+                LabelProcessor.addLabel( labels[0] );
+                labelLookupCompletion( labels, conv, labelQuery );
+        
+            }).catch(( err ) => {
+                console.log ( `exception caught; lookup resolved: ${labelLookupResolved}; responses remaining: ${labelResponsesRemaining}`);
+                console.log( err );
+                console.log('Could not scape the wine from wine searcher' );
+                var responseText = `Sorry, I couldn't find any information on a ${labelQuery}`
+                return new Promise( (resolve, reject) => {
+                    setBadLabelInfoResponse( conv, responseText );
+                    resolve();
+                })
+                
+            });
+        }
+        else{
+            return new Promise( (resolve, reject) => {
+                labelLookupCompletion(labels, conv, labelQuery);
+                resolve();
+            });
+            
         }
 
     });
-
-    return labelLookupPromise;
 }
 
 function labelLookupCompletion(labels, conv, labelQuery) {
 
-    labelResponsesRemaining--;
-    if (!labelLookupResolved) {
-        if (labels && labels.length > 0) {
-            resolveWwithGoodLabelInfo(labels, conv);
-        }
-        else if (labelResponsesRemaining <= 0) {
-            resolveWithBadLabelInfo(labelQuery, conv);
-        }
+    if (labels && labels.length > 0) {
+        resolveWwithGoodLabelInfo(labels, conv);
+    }
+    else{
+        resolveWithBadLabelInfo(labelQuery, conv);
     }
 }
 
 function resolveWithBadLabelInfo(labelQuery, conv) {
-    labelLookupResolved = true;
     console.log(`Sorry, I couldn't find any information on a ${labelQuery}`);
     var responseText = `Sorry, I couldn't find any information on a ${labelQuery}`;
     setBadLabelInfoResponse(conv, responseText);
-    labelLookupResolver();
 }
 
 function resolveWwithGoodLabelInfo(labels, conv) {
-    labelLookupResolved = true;
     var label = labels[0];
     console.log(label.toJSON());
     setGoodLabelInfoResponse(conv, label);
-    labelLookupResolver();
 }
 
 function setGoodLabelInfoResponse( conv, label ){
@@ -204,12 +198,12 @@ function addNoteDetail( conv, detail ){
 exports.describeBottle = function describeBottle( conv ){
 
     console.info( 'Describe Bottle' );
-
+    
     var vintage = getVintageFromContext( conv );
     var bottleName = getBottleNameFromContext( conv );
 
     if ( vintage && bottleName ){
-        return startLabelLookup( conv, vintage, bottleName );
+        return startLabelLookup( conv );
     }
     else{
         var responseText = `Sorry, I didn't get that. What was the vintage and bottle label name?`;
@@ -267,4 +261,21 @@ exports.addTastingNote = function addTastingNote( conv ){
         text: `Done! Tasting note added.`
     }));
 
+}
+
+
+exports.removeLabelFromSystem = function removeLabelFromSystem( conv ){
+    console.log( 'Remove Label From System' );
+
+    var rowKey = getRowKeyFromContext( conv );
+
+    if ( rowKey ){
+        LabelProcessor.removeLabelFromSystem( rowKey );
+    }
+
+  
+    conv.close(new SimpleResponse({
+        speech: `Ok.`,
+        text: `Ok.`
+    }));
 }
