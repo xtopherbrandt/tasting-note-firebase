@@ -19,38 +19,15 @@ Contact Info: xtopher.brandt at gmail
 
 'use strict';
 
-const Scraper = require( './wine-searcher-scraper');
-const LabelProcessor = require( './labelProcessor' );
-const functions = require('firebase-functions');
-const { dialogflow, Image, UpdatePermission, SimpleResponse, Suggestions, List, BasicCard, Table } = require('actions-on-google')
-
-function getAddNoteContext( conv ){
-    return conv.contexts.get( 'add_note' );
-}
-
-function getVintageFromContext( conv ){
-    var context = getAddNoteContext( conv );
-    if ( context ){
-        return context.parameters.vintage;
-    }
-}
-
-function getBottleNameFromContext( conv ){
-    var context = getAddNoteContext( conv );
-    if ( context ){
-        return context.parameters.bottleName;
-    }
-}
-
 function getTastingLocationFromContext( conv ){
-    var context = getAddNoteContext( conv );
+    var context = getContext( conv );
     if ( context ){
         return context.parameters.location;
     }
 }
 
 function getRatingFromContext( conv ){
-    var context = getAddNoteContext( conv );
+    var context = getContext( conv );
     if ( context ){
         return context.parameters.rating;
     }
@@ -85,130 +62,8 @@ function getTastingDetailsAsCommaSeparatedList( conv ){
     return listText;
 }
 
-function getRowKeyFromContext( conv ){
-    var context = getAddNoteContext( conv );
-    if ( context ){
-        return context.parameters.rowKey;
-    }
-}
-
-function startLabelLookup( conv ){
-    
-    var vintage = getVintageFromContext( conv );
-    var bottleName = getBottleNameFromContext( conv );
-
-    var scraper = new Scraper();
-    var labelQuery = `${vintage} ${bottleName}`;
-   
-    console.log( `Looking up: ${labelQuery}` );
-
-    return LabelProcessor.findLabel( vintage, bottleName ).then( labels => {
-
-        console.log( `  Found ${labels.length} labels in local storage.`);
-
-        if ( labels && labels.length == 0 ){
-            return scraper.wineLabelQuery( labelQuery ).then( labels => {
-                LabelProcessor.addLabel( labels[0] );
-                labelLookupCompletion( labels, conv, labelQuery );
-        
-            }).catch(( err ) => {
-                console.log ( `exception caught; lookup resolved: ${labelLookupResolved}; responses remaining: ${labelResponsesRemaining}`);
-                console.log( err );
-                console.log('Could not scape the wine from wine searcher' );
-                var responseText = `Sorry, I couldn't find any information on a ${labelQuery}`
-                return new Promise( (resolve, reject) => {
-                    setBadLabelInfoResponse( conv, responseText );
-                    resolve();
-                })
-                
-            });
-        }
-        else{
-            return new Promise( (resolve, reject) => {
-                labelLookupCompletion(labels, conv, labelQuery);
-                resolve();
-            });
-            
-        }
-
-    });
-}
-
-function labelLookupCompletion(labels, conv, labelQuery) {
-
-    if (labels && labels.length > 0) {
-        resolveWwithGoodLabelInfo(labels, conv);
-    }
-    else{
-        resolveWithBadLabelInfo(labelQuery, conv);
-    }
-}
-
-function resolveWithBadLabelInfo(labelQuery, conv) {
-    console.log(`Sorry, I couldn't find any information on a ${labelQuery}`);
-    var responseText = `Sorry, I couldn't find any information on a ${labelQuery}`;
-    setBadLabelInfoResponse(conv, responseText);
-}
-
-function resolveWwithGoodLabelInfo(labels, conv) {
-    var label = labels[0];
-    console.log(label.toJSON());
-    setGoodLabelInfoResponse(conv, label);
-}
-
-function setGoodLabelInfoResponse( conv, label ){
-    
-    conv.ask( new SimpleResponse({
-        speech: `Nice. Where did you taste it?`,
-        text: `Where did you taste it?`
-    }));
-
-    conv.ask( new BasicCard({
-        title: label.labelName,
-        subtitle: label.vintage,
-        image: getImage( label.imageUrl, `Bottle Image` ),
-        text: label.getFormattedText()
-    }));
-
-    conv.contexts.set( 'Question_Location', 1 );
-    conv.contexts.set( 'Describe_Bottle', 10 );
-}
-
-function getImage( url, altText ){
-    return new Image({
-        url: url,
-        alt: altText
-    });
-}
-
-function setBadLabelInfoResponse( conv, responseText ){
-                
-    conv.ask(new SimpleResponse({
-        speech: responseText,
-        text: responseText
-    }));
-
-    conv.contexts.set( 'Question_Bottle_Description', 1 );
-}
-
 function addNoteDetail( conv, detail ){
 
-}
-
-exports.describeBottle = function describeBottle( conv ){
-
-    console.info( 'Describe Bottle' );
-    
-    var vintage = getVintageFromContext( conv );
-    var bottleName = getBottleNameFromContext( conv );
-
-    if ( vintage && bottleName ){
-        return startLabelLookup( conv );
-    }
-    else{
-        var responseText = `Sorry, I didn't get that. What was the vintage and bottle label name?`;
-        setBadLabelInfoResponse( conv, responseText );
-    }
 }
 
 exports.tastingDetails = function tastingDetails( conv ){
@@ -263,19 +118,3 @@ exports.addTastingNote = function addTastingNote( conv ){
 
 }
 
-
-exports.removeLabelFromSystem = function removeLabelFromSystem( conv ){
-    console.log( 'Remove Label From System' );
-
-    var rowKey = getRowKeyFromContext( conv );
-
-    if ( rowKey ){
-        LabelProcessor.removeLabelFromSystem( rowKey );
-    }
-
-  
-    conv.close(new SimpleResponse({
-        speech: `Ok.`,
-        text: `Ok.`
-    }));
-}

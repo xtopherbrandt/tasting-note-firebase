@@ -23,6 +23,7 @@ const functions = require('firebase-functions');
 const { dialogflow, Image, UpdatePermission, SimpleResponse, Suggestions, BasicCard, Button } = require('actions-on-google')
 const moment = require( 'moment' );
 const addTastingNote = require( './addTastingNote.js' );
+const describeBottle = require( './describeBottle' );
 
 const {google} = require('googleapis');
 
@@ -38,14 +39,14 @@ app.intent('Default Fallback Intent', fallback );
 
 app.intent('What Can You Do', help );
 
-app.intent('Describe Bottle', addTastingNote.describeBottle );
+app.intent('Describe Bottle', describeBottle.start );
 app.intent('Tasting Details', addTastingNote.tastingDetails );
 app.intent('Tasting Note Confirmation', addTastingNote.tastingNoteConfirmation );
 app.intent('Tasting Details More', addTastingNote.tastingDetails );
 app.intent('Tasting Note Confirmation - yes', addTastingNote.addTastingNote );
 
 //administrative intents
-app.intent('Remove Label From System', addTastingNote.removeLabelFromSystem );
+app.intent('Remove Label From System', describeBottle.removeLabelFromSystem );
 
 const welcomeSuggestions = [
     'Add a Note'
