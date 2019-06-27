@@ -85,13 +85,7 @@ module.exports = class WineSearcherScraper {
             this.label = new Label();
         }
     
-        if ( this.label.isValid() ){
-            this.resolve( [this.label] );
-        }
-        else{
-            this.resolve( [] );
-        }
-        
+        this.resolve( [this.label] );
     }
 
     getProducer( $ ){        

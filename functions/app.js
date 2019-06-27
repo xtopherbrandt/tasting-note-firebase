@@ -45,11 +45,14 @@ app.intent('Tasting Note Confirmation', addTastingNote.tastingNoteConfirmation )
 app.intent('Tasting Details More', addTastingNote.tastingDetails );
 app.intent('Tasting Note Confirmation - yes', addTastingNote.addTastingNote );
 
+app.intent('Describe Bottle - select', describeBottle.select );
+
 //administrative intents
 app.intent('Remove Label From System', describeBottle.removeLabelFromSystem );
 
 const welcomeSuggestions = [
-    'Add a Note'
+    'Add a Note',
+    'Tell Me About'
 ]
 
 function welcome(conv) {

@@ -48,19 +48,54 @@ exports.findLabel = function findLabel ( vintage, labelName ){
         })
         .catch(err => {
             console.log('Error getting documents', err);
-            return [new Label()];
+            return [];
+        });
+}
+
+
+exports.findLabelByKey = ( key ) => {
+
+    console.log ( `  in Algolia`);
+    
+    return index.search( { query: key } )
+        .then( response => {
+            var labelResponse = [];
+
+            switch ( response.hits.length ){
+                case 0 :{
+                    console.log( `Label key not found : ${key}` );
+                    break;
+                }
+                case 1 :{
+                    labelResponse.push( hitToLabel( response.hits[0] ) );
+                    break;
+                }
+                default :{
+                    console.log( `Multiple hits for : ${key}. Returning the first` );
+                    labelResponse.push( hitToLabel( response.hits[0] ) );
+                    break;
+                }
+            }
+ 
+            return labelResponse;
+        })
+        .catch(err => {
+            console.log('Error getting documents', err);
+            return [];
         });
 }
   
 exports.addLabel = function addLabel ( label ){
     let documentRef = firestore.collection('labels').doc();
 
-    documentRef.create( label.toJSON() ).then((res) => {
-      console.log(`Label added: ${label.labelName} RowKey: ${label.key}`);
-      addIndex( label );
-    }).catch((err) => {
-      console.log(`Failed to create document: ${err}`);
-    });
+    if ( label.isValid() ){
+        documentRef.create( label.toJSON() ).then((res) => {
+            console.log(`Label added: ${label.labelName} RowKey: ${label.key}`);
+            addIndex( label );
+          }).catch((err) => {
+            console.log(`Failed to create document: ${err}`);
+          });
+    }
 }
 
 function addIndex( label ){

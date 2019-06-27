@@ -31,6 +31,10 @@ function getContext( conv ){
     return conv.contexts.get( contextName );
 }
 
+function getIntentOptionsContext( conv ){
+    return conv.contexts.get( 'actions_intent_option' );
+}
+
 function identifyContext( conv ){
     var contextsFound = contexts.filter( contextFilter, conv );
     if ( contextsFound && contextsFound[0] ){
@@ -59,9 +63,15 @@ function getBottleNameFromContext( conv ){
     }
 }
 
+function getKeyFromContext( conv ){
+    var context = getIntentOptionsContext( conv );
+    if ( context ){
+        return context.parameters.OPTION;
+    }
+}
 
 function startLabelLookup( conv ){
-    
+        
     var vintage = getVintageFromContext( conv );
     var bottleName = getBottleNameFromContext( conv );
 
@@ -70,109 +80,169 @@ function startLabelLookup( conv ){
    
     console.log( `Looking up: ${labelQuery}` );
 
-    return LabelProcessor.findLabel( vintage, bottleName ).then( labels => {
+    var promises = [];
+
+    promises.push( scraper.wineLabelQuery( labelQuery ) );
+    promises.push( LabelProcessor.findLabel( vintage, bottleName ) );
+
+    return Promise.all( promises ).then( labels => { 
+        var allLabels = flattenArray( labels );
+        console.log( `   Found ${allLabels.length} labels`);
+        labelLookupCompletion( conv, allLabels );
+
+    }, reason => {
+        console.log ( `Look up failed` );
+        console.log( reason );
+        var responseText = `Sorry, I couldn't find any information on a ${labelQuery}`
+        setBadLabelInfoResponse( conv, responseText );
+    });
+}
+
+function flattenArray( arr ){
+    return arr.reduce((acc, val) => acc.concat(val), []);
+}
+
+function startLabelKeyLookup( conv ){
+    
+    var key = getKeyFromContext( conv );
+   
+    console.log( `Looking up: ${key}` );
+
+    return LabelProcessor.findLabelByKey( key ).then( labels => {
 
         console.log( `  Found ${labels.length} labels in local storage.`);
 
         if ( labels && labels.length == 0 ){
-            return scraper.wineLabelQuery( labelQuery ).then( labels => {
-                LabelProcessor.addLabel( labels[0] );
-                labelLookupCompletion( labels, conv, labelQuery );
-        
-            }).catch(( err ) => {
-                console.log ( `exception caught; lookup resolved: ${labelLookupResolved}; responses remaining: ${labelResponsesRemaining}`);
-                console.log( err );
-                console.log('Could not scape the wine from wine searcher' );
-                var responseText = `Sorry, I couldn't find any information on a ${labelQuery}`
-                return new Promise( (resolve, reject) => {
-                    setBadLabelInfoResponse( conv, responseText );
-                    resolve();
-                })
-                
-            });
+            var responseText = `Hmmm. My bad, I can't actually find the details for that label.`;
+            setBadLabelInfoResponse( conv, responseText );
         }
         else{
-            return new Promise( (resolve, reject) => {
-                labelLookupCompletion(labels, conv, labelQuery);
-                resolve();
-            });
-            
+            labelLookupCompletion( conv, labels );
         }
 
     });
 }
 
-function labelLookupCompletion(labels, conv, labelQuery) {
+function labelLookupCompletion( conv, labels ) {
 
     if (labels && labels.length > 0) {
-        resolveWwithGoodLabelInfo(labels, conv);
+        resolveWwithGoodLabelInfo( conv, labels );
     }
     else{
-        resolveWithBadLabelInfo(labelQuery, conv);
+        resolveWithBadLabelInfo( conv );
     }
 }
 
-function resolveWithBadLabelInfo(labelQuery, conv) {
-    console.log(`Sorry, I couldn't find any information on a ${labelQuery}`);
-    var responseText = `Sorry, I couldn't find any information on a ${labelQuery}`;
+function resolveWithBadLabelInfo( conv ) {
+    console.log(`Sorry, I couldn't find any information on that label.`);
+    var responseText = `Sorry, I couldn't find any information on that label`;
     setBadLabelInfoResponse(conv, responseText);
 }
 
-function resolveWwithGoodLabelInfo(labels, conv) {
-    var label = labels[0];
-    console.log(label.toJSON());
-    setGoodLabelInfoResponse(conv, label);
+function resolveWwithGoodLabelInfo( conv, labels ) {
+    setGoodLabelInfoResponse( conv, labels );
 }
 
-function setGoodLabelInfoResponse( conv, label){
+function setGoodLabelInfoResponse( conv, labels ){
     var contextName = identifyContext( conv );
     
     switch (contextName){
         case 'add_note' :{
-            addNoteContextResponse( conv, label );
+            addNoteContextResponse( conv, labels );
             break;
         }
         case 'tell_me_about' :{
-            tellMeAboutContextResponse( conv, label );
+            tellMeAboutContextResponse( conv, labels );
             break;
         }
     }
 }
 
-function addNoteContextResponse( conv, label ){
+function createLabelList( labels ){
+    return new List({
+        title: 'Bottle Labels Found',
+        items: createLabelListItems( labels )
+    });
+}
+
+function createLabelListItems( labels ){
+    return labels.filter( ( item ) => {
+        return item.key ? true : false;
+    }).reduce( ( items, item, i ) => { 
+        const keyName = `${item.key}`;
+        items[keyName] = {
+                synonyms: [
+                    item.labelName,
+                    i
+                ],
+                title: item.getLabelCardTitle(),
+                description: `${item.blend} ${item.getUnformattedRegion()}`,
+                image: new Image({
+                    url : item.imageUrl,
+                    alt : 'bottle lable picture'
+                }) 
+        };
+        return items;
+    }, {});
+}
+
+function addNoteContextResponse( conv, labels ){
     
     conv.ask( new SimpleResponse({
         speech: `Nice. Where did you taste it?`,
         text: `Where did you taste it?`
     }));
 
-    conv.ask( new BasicCard({
-        title: label.labelName,
-        subtitle: label.vintage,
-        image: getImage( label.imageUrl, `Bottle Image` ),
-        text: label.getFormattedText()
-    }));
+    conv.ask( createAddNoteCard( labels[0] ) );
 
     conv.contexts.set( 'Question_Location', 1 );
     conv.contexts.set( 'Describe_Bottle', 10 );
 }
- 
-function tellMeAboutContextResponse( conv, label ){
-    
-    conv.ask( new SimpleResponse({
-        speech: `Here's what I found. Would you like to check another?`,
-        text: `Here's what I found. Would you like to check another?`
-    }));
 
-    conv.ask( new BasicCard({
+function createAddNoteCard( label ){
+    return new BasicCard({
         title: label.labelName,
         subtitle: label.vintage,
         image: getImage( label.imageUrl, `Bottle Image` ),
         text: label.getFormattedText()
-    }));
+    })
+}
 
-    conv.contexts.set( 'Question_Lookup_Another', 1 );
-    conv.contexts.set( 'Describe_Bottle', 10 );
+function createTellMeAboutCard( label ){
+    return new BasicCard({
+        title: label.labelName,
+        subtitle: label.vintage,
+        image: getImage( label.imageUrl, `Bottle Image` ),
+        text: label.getFormattedText()
+    })
+}
+
+function tellMeAboutContextResponse( conv, labels ){
+
+    if (labels.length == 1){
+           
+        conv.ask( new SimpleResponse({
+            speech: `Here's what I found. Would you like to check another?`,
+            text: `Here's what I found. Would you like to check another?`
+        }));
+
+        conv.ask( createTellMeAboutCard( labels[0] ) );
+            
+        conv.contexts.set( 'Question_Lookup_Another', 1 );
+        conv.contexts.set( 'Describe_Bottle', 10 );
+    }
+    else{
+ 
+        conv.ask( new SimpleResponse({
+            speech: `Here's what I found. Which one would you like to review?`,
+            text: `Here's what I found. Which one would you like to review?`
+        }));
+
+        conv.ask( createLabelList( labels ) );
+            
+        conv.contexts.set( 'Describe_Bottle', 10 );
+        conv.contexts.set( 'Question_Bottle_Description', 1 );
+    }
 }
 
 function getImage( url, altText ){
@@ -212,6 +282,21 @@ exports.start = function describeBottle( conv ){
     }
     else{
         var responseText = `Sorry, I didn't get that. What was the vintage and bottle label name?`;
+        setBadLabelInfoResponse( conv, responseText );
+    }
+}
+
+exports.select = function selectBottle( conv ){
+
+    console.info( 'Select Bottle' );
+    
+    var key = getKeyFromContext( conv );
+
+    if ( key ){
+       return startLabelKeyLookup( conv )
+    }
+    else{
+        var responseText = `Sorry, I didn't get that. Which bottle?`;
         setBadLabelInfoResponse( conv, responseText );
     }
 }

@@ -179,6 +179,41 @@ module.exports = class Label {
     
         return formattedText;
     }
+    
+    getUnformattedRegion(){
+        var formattedText = '';
+        var partAdded = false;
+
+        if ( this.country || this.region || this.subRegion || this.appellation ){
+            formattedText = `Region :`;
+            formattedText += ` `;
+        }
+
+        if ( this.country ){
+            formattedText += `${this.country}`;
+            partAdded = true;
+        }
+
+        if ( this.region ){
+            formattedText += this.getRegionSeparator( partAdded );
+            formattedText += `${this.region}`;
+            partAdded = true;
+        }
+        
+        if ( this.subRegion ){
+            formattedText += this.getRegionSeparator( partAdded );
+            formattedText += `${this.subRegion}`;
+            partAdded = true;
+        }
+        
+        if ( this.appellation ){
+            formattedText += this.getRegionSeparator( partAdded );
+            formattedText += `${this.appellation}`;
+            partAdded = true;
+        }
+    
+        return formattedText;
+    }
 
     getRegionSeparator( partAdded ){
         if ( partAdded ){
